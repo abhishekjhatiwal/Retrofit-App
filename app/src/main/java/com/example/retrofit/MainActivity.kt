@@ -45,7 +45,151 @@ import com.example.retrofit.data.model.Product
 import com.example.retrofit.presentation.ProductsViewModel
 import com.example.retrofit.ui.theme.RetrofitTheme
 import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.ui.draw.shadow
 
+class MainActivity : ComponentActivity() {
+
+    private val viewModel by viewModels<ProductsViewModel>(factoryProducer = {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return ProductsViewModel(ProductsRepositoryImpl(RetrofitInstance.api)) as T
+            }
+        }
+    })
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            RetrofitTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        val productList = viewModel.products.collectAsState().value
+                        val context = LocalContext.current
+
+                        // ✅ Collect toast event once
+                        LaunchedEffect(Unit) {
+                            viewModel.showErrorToastChannel.collectLatest { show ->
+                                if (show) {
+                                    Toast.makeText(
+                                        context,
+                                        "Error loading products",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+
+                        // ✅ Loading state UI
+                        if (productList.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                items(productList.size) { index ->
+                                    ProductCard(productList[index])
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProductCard(product: Product) {
+    val imageState = rememberAsyncImagePainter(
+        model = ImageRequest.Builder(LocalContext.current)
+            .data(product.thumbnail)
+            .size(Size.ORIGINAL)
+            .crossfade(true)
+            .build()
+    ).state
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(6.dp, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .height(300.dp)
+    ) {
+
+        // ✅ Handle image loading states cleanly
+        when (imageState) {
+            is AsyncImagePainter.State.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            is AsyncImagePainter.State.Success -> {
+                Image(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    painter = imageState.painter,
+                    contentDescription = product.title,
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            is AsyncImagePainter.State.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Failed to load image", color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            else -> {}
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            text = "${product.title} — Price: ${product.price}$",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            text = product.description,
+            fontSize = 13.sp,
+        )
+    }
+}
+
+
+/*
 class MainActivity : ComponentActivity() {
 
     private val viewModel by viewModels<ProductsViewModel>(factoryProducer = {
@@ -164,3 +308,5 @@ fun Product(product: Product) {
 
     }
 }
+
+ */
